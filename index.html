@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BiesSse - Accesso Riservato</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .login-container {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 420px;
+            width: 90%;
+            text-align: center;
+        }
+        .logo-placeholder {
+            width: 180px;
+            height: 60px;
+            margin: 0 auto 30px;
+            background: linear-gradient(135deg, #1e3a5f, #2d5a87);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 1.4em;
+            letter-spacing: 2px;
+        }
+        h1 {
+            color: #1e3a5f;
+            font-size: 1.5em;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            color: #666;
+            font-size: 0.9em;
+            margin-bottom: 30px;
+        }
+        .input-group {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+        label {
+            display: block;
+            color: #333;
+            font-size: 0.85em;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+        input[type="password"] {
+            width: 100%;
+            padding: 14px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1em;
+            transition: border-color 0.2s;
+        }
+        input[type="password"]:focus {
+            outline: none;
+            border-color: #1e3a5f;
+        }
+        button {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #1e3a5f, #2d5a87);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(30,58,95,0.4);
+        }
+        button:active {
+            transform: translateY(0);
+        }
+        button:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .error {
+            color: #e74c3c;
+            font-size: 0.85em;
+            margin-top: 15px;
+            display: none;
+        }
+        .error.visible {
+            display: block;
+        }
+        .loading {
+            display: none;
+            margin-top: 20px;
+        }
+        .loading.visible {
+            display: block;
+        }
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid #e0e0e0;
+            border-top-color: #1e3a5f;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 10px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .footer {
+            margin-top: 30px;
+            font-size: 0.75em;
+            color: #999;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container" id="loginBox">
+        <div class="logo-placeholder">BIESSE</div>
+        <h1>Proposta Riservata</h1>
+        <p class="subtitle">Modulo Approvvigionamenti - Marzo 2026</p>
+
+        <form id="loginForm">
+            <div class="input-group">
+                <label for="password">Codice di accesso</label>
+                <input type="password" id="password" placeholder="Inserisci il codice ricevuto" autocomplete="off" required>
+            </div>
+            <button type="submit" id="submitBtn">Accedi alla presentazione</button>
+        </form>
+
+        <p class="error" id="errorMsg">Codice non valido. Riprova.</p>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p style="color: #666; font-size: 0.9em;">Decriptazione in corso...</p>
+        </div>
+
+        <p class="footer">Contenuto protetto da crittografia AES-256</p>
+    </div>
+
+    <script>
+        const ITERATIONS = 100000;
+        const SALT_LENGTH = 16;
+        const IV_LENGTH = 12;
+
+        async function deriveKey(password, salt) {
+            const encoder = new TextEncoder();
+            const keyMaterial = await crypto.subtle.importKey(
+                'raw',
+                encoder.encode(password),
+                'PBKDF2',
+                false,
+                ['deriveKey']
+            );
+
+            return crypto.subtle.deriveKey(
+                {
+                    name: 'PBKDF2',
+                    salt: salt,
+                    iterations: ITERATIONS,
+                    hash: 'SHA-256'
+                },
+                keyMaterial,
+                { name: 'AES-GCM', length: 256 },
+                false,
+                ['decrypt']
+            );
+        }
+
+        async function decrypt(encryptedBase64, password) {
+            const encryptedData = Uint8Array.from(atob(encryptedBase64), c => c.charCodeAt(0));
+
+            const salt = encryptedData.slice(0, SALT_LENGTH);
+            const iv = encryptedData.slice(SALT_LENGTH, SALT_LENGTH + IV_LENGTH);
+            const ciphertext = encryptedData.slice(SALT_LENGTH + IV_LENGTH);
+
+            const key = await deriveKey(password, salt);
+
+            const decrypted = await crypto.subtle.decrypt(
+                { name: 'AES-GCM', iv: iv },
+                key,
+                ciphertext
+            );
+
+            return new TextDecoder().decode(decrypted);
+        }
+
+        async function loadAndDecrypt(password) {
+            const response = await fetch('data.json');
+            if (!response.ok) throw new Error('Data not found');
+
+            const data = await response.json();
+            const decryptedJson = await decrypt(data.encrypted, password);
+            return JSON.parse(decryptedJson);
+        }
+
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const password = document.getElementById('password').value;
+            const errorMsg = document.getElementById('errorMsg');
+            const loading = document.getElementById('loading');
+            const submitBtn = document.getElementById('submitBtn');
+
+            errorMsg.classList.remove('visible');
+            loading.classList.add('visible');
+            submitBtn.disabled = true;
+
+            try {
+                const bundle = await loadAndDecrypt(password);
+
+                // Get the main presentation HTML
+                let presentationHtml = bundle.files[bundle.entry];
+
+                // If there's a mockups placeholder, create a blob URL for the iframe
+                if (bundle.mockupsHtml && presentationHtml.includes('MOCKUP_PLACEHOLDER')) {
+                    const mockupsBlob = new Blob([bundle.mockupsHtml], { type: 'text/html' });
+                    const mockupsUrl = URL.createObjectURL(mockupsBlob);
+                    presentationHtml = presentationHtml.replace('MOCKUP_PLACEHOLDER', mockupsUrl);
+                }
+
+                // Replace entire document with decrypted presentation
+                document.open();
+                document.write(presentationHtml);
+                document.close();
+
+            } catch (err) {
+                console.error('Decryption failed:', err);
+                errorMsg.classList.add('visible');
+                loading.classList.remove('visible');
+                submitBtn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>
